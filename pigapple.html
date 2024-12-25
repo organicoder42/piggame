@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gris med Hat Æblespil</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+</head>
+<body>
+<script>
+// Grisens position
+let pig = {
+    x: 300,
+    y: 500
+};
+
+// Her samler vi alle faldende objekter (æbler, bomber, raketter) i én liste
+let fallingObjects = [];
+
+// Scoring og liv
+let score = 0;
+let highScore = 0;
+let lives = 3;
+
+// Spil-tilstand
+let gameOver = false;
+
+// Eksplosions-variabler
+let isExploding = false;
+let explosionStartFrame = 0;
+
+// Grisens aktuelle hastighed (starter på 7.5)
+let pigSpeed = 7.5;
+
+// Speed-boost-variabler
+let isBoosted = false;
+let boostStartFrame = 0;
+// 3,5 sekunder ved 60 FPS = 210 frames
+const BOOST_DURATION = 210;
+
+function setup() {
+    createCanvas(600, 600);
+    frameRate(60);
+}
+
+function draw() {
+    if (!gameOver) {
+        background(135, 206, 235);
+        
+        // Tjek om boost-tiden er udløbet
+        if (isBoosted) {
+            let elapsed = frameCount - boostStartFrame;
+            if (elapsed > BOOST_DURATION) {
+                // Slut på boost
+                pigSpeed = 7.5;
+                isBoosted = false;
+            }
+        }
+        
+        // Styr grisen (venstre/højre) med den nuværende hastighed pigSpeed
+        if (keyIsDown(LEFT_ARROW)) {
+            pig.x -= pigSpeed;
+        }
+        if (keyIsDown(RIGHT_ARROW)) {
+            pig.x += pigSpeed;
+        }
+        
+        // Hold grisen inden for skærmen
+        pig.x = constrain(pig.x, 0, width - 60);
+        
+        // Tilføj nye objekter hvert sekund (60 frames)
+        if (frameCount % 60 === 0) {
+            let r = random(1);
+            
+            if (r < 0.7) {
+                // 70% chance: æble
+                fallingObjects.push({
+                    x: random(width - 30),
+                    y: 0,
+                    speed: 3,
+                    type: 'apple'
+                });
+            } else if (r < 0.9) {
+                // 20% chance: bombe
+                fallingObjects.push({
+                    x: random(width - 30),
+                    y: 0,
+                    speed: 3,
+                    type: 'bomb'
+                });
+            } else {
+                // 10% chance: festraket
+                fallingObjects.push({
+                    x: random(width - 30),
+                    y: 0,
+                    speed: 3,
+                    type: 'rocket'
+                });
+            }
+        }
+        
+        // Opdater og tegn alle objekter (æbler, bomber, raketter)
+        for (let i = fallingObjects.length - 1; i >= 0; i--) {
+            let obj = fallingObjects[i];
+            
+            // Flyt objektet
+            obj.y += obj.speed;
+            
+            // Tegn objektet afhængigt af type
+            if (obj.type === 'apple') {
+                drawApple(obj.x, obj.y);
+            } 
+            else if (obj.type === 'bomb') {
+                drawBomb(obj.x, obj.y);
+            }
+            else if (obj.type === 'rocket') {
+                drawRocket(obj.x, obj.y);
+            }
+            
+            // Kollisionstjek (samme bounding box for alle objekter)
+            let objCenterX = obj.x + 15;
+            let objCenterY = obj.y + 15;
+            
+            // Grisens (inkl. hat) bounding box
+            // (pig.x, pig.y - 25) -> (pig.x + 60, pig.y + 60)
+            if (objCenterX >= pig.x && objCenterX <= pig.x + 60 &&
+                objCenterY >= pig.y - 25 && objCenterY <= pig.y + 60) {
+                
+                // Æble => +1 score
+                if (obj.type === 'apple') {
+                    score++;
+                    if (score > highScore) {
+                        highScore = score;
+                    }
+                }
+                // Bombe => -1 liv og eksplosion
+                else if (obj.type === 'bomb') {
+                    lives--;
+                    startExplosion();
+                    if (lives <= 0) {
+                        gameOver = true;
+                    }
+                }
+                // Raket => sæt pigSpeed til 15 og start boost-timer
+                else if (obj.type === 'rocket') {
+                    pigSpeed = 15;
+                    isBoosted = true;
+                    boostStartFrame = frameCount;
+                }
+                
+                // Fjern objektet
+                fallingObjects.splice(i, 1);
+                continue;
+            }
+            
+            // Hvis objektet (kun æble) ryger ned under bunden => -1 liv
+            // Bombe eller raket, der rammer bunden, gør ikke noget i dette eksempel
+            if (obj.y > height) {
+                if (obj.type === 'apple') {
+                    lives--;
+                    if (lives <= 0) {
+                        gameOver = true;
+                    }
+                }
+                // Fjern objektet uanset type
+                fallingObjects.splice(i, 1);
+            }
+        }
+        
+        // Hvis vi er i eksplosionstilstand, tjek om den stadig gælder
+        if (isExploding) {
+            let elapsed = frameCount - explosionStartFrame;
+            // Eksploder i 30 frames (ca. 0,5 sek ved 60 FPS)
+            if (elapsed < 30) {
+                drawExplosion(pig.x + 30, pig.y + 30);
+            } else {
+                // Slut eksplosion
+                isExploding = false;
+            }
+        }
+        
+        // Tegn grisen, hvis vi IKKE eksploderer
+        if (!isExploding) {
+            drawPig();
+        }
+        
+        // Vis score, rekord og liv
+        fill(0);
+        textSize(32);
+        textAlign(LEFT);
+        text('Score: ' + score, 10, 40);
+        text('Rekord: ' + highScore, 10, 80);
+        text('Liv: ' + lives, 10, 120);
+
+    } else {
+        // Game Over-skærm
+        background(0);
+        fill(255);
+        textSize(32);
+        textAlign(CENTER);
+        text(
+            'Game Over!\n' +
+            'Score: ' + score + '\n' +
+            'Rekord: ' + highScore + '\n' +
+            'Tryk ENTER for at spille igen', 
+            width / 2, 
+            height / 2
+        );
+        
+        if (keyIsDown(ENTER)) {
+            resetGame();
+        }
+    }
+}
+
+/* ========== Tegne-funktioner ========== */
+
+// Tegn grisen
+function drawPig() {
+    // Krop (lyserød ellipse)
+    fill(255, 192, 203);
+    ellipse(pig.x + 30, pig.y + 30, 60, 50);
+    
+    // Hat (mørkegrå)
+    fill(50);
+    rect(pig.x + 10, pig.y - 5, 40, 10);   // Hat bund
+    rect(pig.x + 15, pig.y - 25, 30, 20);  // Hat top
+    
+    // Ansigt
+    fill(0);
+    ellipse(pig.x + 20, pig.y + 25, 5, 5);  // Venstre øje
+    ellipse(pig.x + 40, pig.y + 25, 5, 5);  // Højre øje
+    fill(255, 150, 150);
+    ellipse(pig.x + 30, pig.y + 35, 15, 10);  // Snude
+}
+
+// Tegn æble
+function drawApple(x, y) {
+    fill(255, 0, 0);
+    circle(x + 15, y + 15, 30);
+    fill(101, 67, 33);
+    rect(x + 13, y, 4, 8);
+}
+
+// Tegn bombe
+function drawBomb(x, y) {
+    fill(0);
+    ellipse(x + 15, y + 15, 30, 30);
+}
+
+// Tegn raket
+function drawRocket(x, y) {
+    // Simpel festraket: rektangel + trekant
+    push();
+    fill(255, 165, 0); // Orange
+    // Kropsrektangel
+    rect(x + 10, y + 5, 10, 20);
+    
+    // Trekant i toppen
+    fill(255, 50, 50);
+    triangle(
+      x + 10, y + 5,     // venstre bund
+      x + 20, y + 5,     // højre bund
+      x + 15, y - 5      // top
+    );
+    pop();
+}
+
+/* ========== Eksplosion ========== */
+function startExplosion() {
+    isExploding = true;
+    explosionStartFrame = frameCount;
+}
+
+// Enkel "eksplosions-tegning"
+function drawExplosion(x, y) {
+    push();
+    noStroke();
+    
+    // Eksempel på en simpel gul/rød cirkel
+    fill(255, 0, 0);
+    ellipse(x, y, 80, 80);
+    fill(255, 140, 0);
+    ellipse(x, y, 50, 50);
+    fill(255, 255, 0);
+    ellipse(x, y, 20, 20);
+    
+    pop();
+}
+
+/* ========== Reset spil ========== */
+function resetGame() {
+    gameOver = false;
+    score = 0;
+    lives = 3;
+    fallingObjects = [];
+    pig.x = 300;
+    
+    // Nulstil eksplosions-variabler
+    isExploding = false;
+    explosionStartFrame = 0;
+    
+    // Nulstil grisens hastighed + boost
+    pigSpeed = 7.5;
+    isBoosted = false;
+    boostStartFrame = 0;
+}
+</script>
+</body>
+</html>
